@@ -34,10 +34,13 @@ jobs:
 
       - name: Nuget Restore
         run: nuget restore
+
+      - name: Build All Components
+        run: |
+          msbuild Texture2DDecoderNative/Texture2DDecoderNative.vcxproj /p:Configuration=Release /p:Platform=x64 
+          msbuild AssetStudioFBXNative/AssetStudioFBXNative.vcxproj /p:Configuration=Release /p:Platform=x64
+          msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
       
-      - name: Build and Publish
-        run: msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /p:Configuration=Release /p:Platform="x64" /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
-        
       - name: Upload .NET 9 Artifact
         uses: actions/upload-artifact@v4
         with:
