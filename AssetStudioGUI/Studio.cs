@@ -16,6 +16,7 @@ using System.Xml.Linq;
 using static AssetStudioGUI.Exporter;
 using static CubismLive2DExtractor.CubismParsers;
 using Object = AssetStudio.Object;
+using System.Text.RegularExpressions;
 
 namespace AssetStudioGUI
 {
@@ -1155,6 +1156,79 @@ namespace AssetStudioGUI
             return mocPathDict;
         }
 
+        private static bool TryParseBundleName(string filename, out string characterName, out string variantId)
+        {
+            characterName = null;
+            variantId = null;
+            
+            if (string.IsNullOrEmpty(filename))
+                return false;
+
+            // Try different patterns
+            var patterns = new[]
+            {
+                @"art_live2d_characters_([^_]+)_(\d+)\.bundle",
+                @"build_animations2d_characters_([^_]+)_(\d+)\.bundle",
+                @"build_prefabs_live2d_characters_char2d_([^_]+)_(\d+)\.bundle"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(filename, pattern, RegexOptions.IgnoreCase);
+                if (match.Success && match.Groups.Count >= 3)
+                {
+                    characterName = match.Groups[1].Value;
+                    variantId = match.Groups[2].Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static List<Object> FilterAssetsByBundle(List<Object> assets, string targetCharacter, string targetVariant)
+        {
+            if (string.IsNullOrEmpty(targetCharacter) || string.IsNullOrEmpty(targetVariant))
+                return assets;
+
+            var filtered = new List<Object>();
+            
+            foreach (var asset in assets)
+            {
+                var sourceFileName = asset.assetsFile?.fileName ?? "";
+                
+                if (TryParseBundleName(sourceFileName, out var assetCharacter, out var assetVariant))
+                {
+                    // Only include if character and variant match
+                    if (string.Equals(assetCharacter, targetCharacter, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(assetVariant, targetVariant, StringComparison.OrdinalIgnoreCase))
+                    {
+                        filtered.Add(asset);
+                    }
+                }
+                else
+                {
+                    // If we can't parse the bundle name, include it (could be UnityMonoScripts or shared assets)
+                    // But check if it's an animation - if so, only include if it doesn't match ANY character pattern
+                    if (asset is AnimationClip)
+                    {
+                        // Skip animations that clearly belong to other characters
+                        var lowerName = sourceFileName.ToLower();
+                        if (!lowerName.Contains("animation"))
+                        {
+                            filtered.Add(asset);
+                        }
+                    }
+                    else
+                    {
+                        filtered.Add(asset);
+                    }
+                }
+            }
+            
+            return filtered;
+        }
+
         public static void ExportLive2D(string exportPath, List<MonoBehaviour> selMocs = null, List<AnimationClip> selClipMotions = null, List<MonoBehaviour> selFadeMotions = null, MonoBehaviour selFadeLst = null)
         {
             var baseDestPath = Path.Combine(exportPath, "Live2DOutput");
@@ -1257,7 +1331,33 @@ namespace AssetStudioGUI
                     Logger.Info($"[{modelCounter + 1}/{totalModelCount}] Exporting Live2D from: \"{srcContainer}\"...");
                     try
                     {
-                        var cubismExtractor = new Live2DExtractor(assetGroupKvp, selClipMotions, selFadeMotions, selFadeLst);
+                        // *** NEW CODE START ***
+                        // Parse the moc's bundle name to get character and variant
+                        var mocSourceFile = assetGroupKvp.Key.assetsFile?.fileName ?? "";
+                        List<Object> filteredAssets = assetGroupKvp.Value;
+                        
+                        if (modelGroupOption == Live2DModelGroupOption.BundleStructure)
+                        {
+                            if (TryParseBundleName(mocSourceFile, out var characterName, out var variantId))
+                            {
+                                Logger.Info($"Character: {characterName}, Variant: {variantId}");
+                                // Filter assets to only include those from matching bundles
+                                filteredAssets = FilterAssetsByBundle(assetGroupKvp.Value, characterName, variantId);
+                                Logger.Info($"Filtered {assetGroupKvp.Value.Count} assets down to {filteredAssets.Count} matching assets");
+                            }
+                            else
+                            {
+                                Logger.Warning($"Could not parse bundle name: {mocSourceFile}");
+                            }
+                        }
+                        
+                        // Create new KeyValuePair with filtered assets
+                        var filteredKvp = new KeyValuePair<MonoBehaviour, List<Object>>(assetGroupKvp.Key, filteredAssets);
+                        // *** NEW CODE END ***
+                        
+                        var cubismExtractor = new Live2DExtractor(filteredKvp, selClipMotions, selFadeMotions, selFadeLst);
+                        
+                        // Rest of the code remains the same...
                         var filename = string.IsNullOrEmpty(cubismExtractor.MocMono.assetsFile.originalPath)
                             ? Path.GetFileNameWithoutExtension(cubismExtractor.MocMono.assetsFile.fileName)
                             : Path.GetFileNameWithoutExtension(cubismExtractor.MocMono.assetsFile.originalPath);
@@ -1274,6 +1374,17 @@ namespace AssetStudioGUI
                                 break;
                             case Live2DModelGroupOption.ModelName:
                                 modelPath = modelName;
+                                break;
+                            case Live2DModelGroupOption.BundleStructure:
+                                // Use character_variant as the folder name
+                                if (TryParseBundleName(mocSourceFile, out var charName, out var varId))
+                                {
+                                    modelPath = $"{charName}_{varId}";
+                                }
+                                else
+                                {
+                                    modelPath = filename;
+                                }
                                 break;
                             default: //ContainerPath
                                 var container = searchByFilename && cubismExtractor.Model != null

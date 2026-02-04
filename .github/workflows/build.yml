@@ -5,7 +5,6 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-
   workflow_dispatch:
 
 jobs:
@@ -13,9 +12,16 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: microsoft/setup-msbuild@v1.1
+      - uses: actions/checkout@v4 
+
+      # Ensures .NET 9 SDK is installed
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
       
+      - uses: microsoft/setup-msbuild@v2
+
       - name: Download FBX SDK
         run: |
           md fbx
@@ -29,29 +35,11 @@ jobs:
       - name: Nuget Restore
         run: nuget restore
       
-      - name: Build .Net472
-        run: msbuild /p:Configuration=Release /p:TargetFramework=net472 /verbosity:minimal
-
-      - name: Build .Net5
-        run: msbuild /t:AssetStudioGUI:publish /p:Configuration=Release /p:TargetFramework=net5.0-windows /p:SelfContained=false /verbosity:minimal
-
-      - name: Build .Net6
-        run: msbuild /t:AssetStudioGUI:publish /p:Configuration=Release /p:TargetFramework=net6.0-windows /p:SelfContained=false /verbosity:minimal
-
-      - name: Upload .Net472 Artifact
-        uses: actions/upload-artifact@v2
+      - name: Build and Publish
+        run: msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /p:Configuration=Release /p:Platform="x64" /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
+        
+      - name: Upload .NET 9 Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: AssetStudio.net472
-          path: AssetStudioGUI/bin/Release/net472
-
-      - name: Upload .Net5 Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: AssetStudio.net5
-          path: AssetStudioGUI/bin/Release/net5.0-windows/publish
-
-      - name: Upload .Net6 Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: AssetStudio.net6
-          path: AssetStudioGUI/bin/Release/net6.0-windows/publish
+          name: AssetStudio.net9
+          path: AssetStudioGUI/bin/Release/net9.0-windows/publish

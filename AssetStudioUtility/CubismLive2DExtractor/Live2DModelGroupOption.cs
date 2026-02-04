@@ -5,5 +5,6 @@
         ContainerPath,
         SourceFileName,
         ModelName,
+        BundleStructure,
     }
 }
