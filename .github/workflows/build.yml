@@ -47,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AssetStudio.net9
-          path: AssetStudioGUI/bin/x64/Release/net9.0-windows/publish
+          path: AssetStudioGUI\Release\net9.0-windows\win-x64\publish
