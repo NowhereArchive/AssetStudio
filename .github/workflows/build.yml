@@ -40,9 +40,11 @@ jobs:
           msbuild Texture2DDecoderNative/Texture2DDecoderNative.vcxproj /p:Configuration=Release /p:Platform=x64 
           msbuild AssetStudioFBXNative/AssetStudioFBXNative.vcxproj /p:Configuration=Release /p:Platform=x64
           msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
+
+          Get-ChildItem -r -n AssetStudioGUI/bin/x64/Release/net9.0-windows/ 
       
       - name: Upload .NET 9 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AssetStudio.net9
-          path: AssetStudioGUI/bin/Release/net9.0-windows/publish
+          path: AssetStudioGUI/bin/x64/Release/net9.0-windows/publish
