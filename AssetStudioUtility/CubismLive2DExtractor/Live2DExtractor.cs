@@ -358,6 +358,9 @@ namespace CubismLive2DExtractor
                                 ? exportMethod + " (unable to export motions using Fade motion method)"
                                 : exportMethod + " (no Fade motions found)";
                         }
+                        Logger.Debug($"[Debug] PartNames count: {PartNames.Count}, ParameterNames count: {ParameterNames.Count}");
+                        if (ParameterNames.Count > 0)
+                            Logger.Debug($"[Debug] First param: {ParameterNames.First()}");
                         converter = new CubismMotion3Converter(AnimationClips, PartNames, ParameterNames);
                         break;
                 }

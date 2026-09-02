@@ -150,6 +150,11 @@ namespace CubismLive2DExtractor
                         target = "Model";
                         id = "LipSync";
                         break;
+                    case "CubismOffscreenRenderTexture":
+                    case "CubismMaskController":
+                        target = null;
+                        id = null;
+                        return;
                 }
             }
         }

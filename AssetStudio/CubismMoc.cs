@@ -51,9 +51,8 @@ namespace AssetStudio
             {
                 var msg = $"Unknown SDK version ({sdkVer})";
                 VersionDescription = msg;
-                Version = 0;
-                Logger.Warning($"Live2D model \"{moc.m_Name}\": " + msg);
-                return;
+                Version = (CubismSDKVersion)5;
+				Logger.Warning($"Live2D model \"{moc.m_Name}\": " + msg);
             }
             isBigEndian = BitConverter.ToBoolean(modelData, 5);
 

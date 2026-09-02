@@ -1,11 +1,6 @@
-name: AssetStudioBuild
+name: Build AssetStudioMod
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
   workflow_dispatch:
 
 jobs:
@@ -13,45 +8,122 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: microsoft/setup-msbuild@v1.1
-      
-      - name: Download FBX SDK
+      - name: Clone AssetStudioMod
+        run: git clone --branch AssetStudioMod https://github.com/aelurum/AssetStudio.git src
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Patch csproj files to add net10.0
+        shell: pwsh
         run: |
-          md fbx
-          cd fbx
-          Invoke-WebRequest "https://damassets.autodesk.net/content/dam/autodesk/www/adn/fbx/2020-2-1/fbx202021_fbxsdk_vs2019_win.exe" -OutFile "fbxsdk.exe"
-          Start-Process -FilePath "fbxsdk.exe" /S -Wait
-          Invoke-WebRequest "https://damassets.autodesk.net/content/dam/autodesk/www/adn/fbx/2020-2-1/fbx202021_fbxsdk_vs2019_pdbs.exe" -OutFile "fbxpdb.exe"
-          Start-Process -FilePath "fbxpdb.exe" /S -Wait
-          cd ..
+          Get-ChildItem -Path src -Recurse -Filter "*.csproj" | ForEach-Object {
+            $content = Get-Content $_.FullName -Raw
+            # Add net10.0-windows alongside net9.0-windows
+            $content = $content -replace 'net9\.0-windows', 'net9.0-windows;net10.0-windows'
+            # Add net10.0 alongside net9.0 (but not where -windows already handled it)
+            $content = $content -replace ';net9\.0(?!-)', ';net9.0;net10.0'
+            Set-Content $_.FullName $content
+            Write-Host "Patched $($_.Name)"
+          }
 
-      - name: Nuget Restore
-        run: nuget restore
+      - name: Download FBX SDK
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path fbx | Out-Null
+          Invoke-WebRequest "https://damassets.autodesk.net/content/dam/autodesk/www/adn/fbx/2020-2-1/fbx202021_fbxsdk_vs2019_win.exe" -OutFile "fbx/fbxsdk.exe"
+          Start-Process -FilePath "fbx/fbxsdk.exe" /S -Wait
+          Invoke-WebRequest "https://damassets.autodesk.net/content/dam/autodesk/www/adn/fbx/2020-2-1/fbx202021_fbxsdk_vs2019_pdbs.exe" -OutFile "fbx/fbxpdb.exe"
+          Start-Process -FilePath "fbx/fbxpdb.exe" /S -Wait
+
+      - name: Build native C++ projects (Texture2DDecoderNative)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path src -Recurse -Filter "*.vcxproj" | ForEach-Object {
+            Write-Host "Building $($_.FullName)"
+            msbuild $_.FullName /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
+            msbuild $_.FullName /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
+          }
+
+      - name: Print Texture2DDecoderNative csproj references (debug)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path src -Recurse -Filter "*.csproj" | ForEach-Object {
+            $content = Get-Content $_.FullName -Raw
+            if ($content -match 'Texture2DDecoderNative') {
+              Write-Host "=== $($_.FullName) ==="
+              # Print lines mentioning Texture2DDecoder
+              Get-Content $_.FullName | Select-String 'Texture2DDecoder'
+            }
+          }
+
+      - name: Patch motion converter to handle SDK 5/6 OffscreenRendering bindings
+        shell: pwsh
+        run: |
+          $file = Get-ChildItem -Path src -Recurse -Filter "CubismMotion3Converter.cs" | Select-Object -First 1
+          $content = Get-Content $file.FullName -Raw
+          # Add OffscreenRendering cases before the closing brace of the script switch
+          $content = $content -replace 
+            '(case "CubismMouthController":.*?break;)(\s*\})',
+            '$1
+                          case "CubismOffscreenRenderTexture":
+                          case "CubismMaskController":
+                          case "CubismOffscreenRenderTextureConfig":
+                              // SDK 5/6 rendering infrastructure - not motion data, skip silently
+                              return;$2'
+          Set-Content $file.FullName $content
+          Write-Host "Patched CubismMotion3Converter for SDK 5/6 offscreen rendering bindings"
+
+      - name: Patch Live2D SDK v6 unknown version guard
+        shell: pwsh
+        run: |
+            $file = Get-ChildItem -Path src -Recurse -Filter "Live2DExtractor.cs" | Select-Object -First 1
+            $content = Get-Content $file.FullName -Raw
+            $content = $content -replace 
+              '(Logger\.Warning\(\$"Live2D model.*?Unknown SDK version.*?\);)\s*\r?\n\s*return;',
+              '$1'
+            Set-Content $file.FullName $content
+            Write-Host "Patched: removed return after unknown SDK version warning"
+
+      - name: Restore NuGet packages
+        working-directory: src
+        run: dotnet restore
+
+      - name: Publish GUI
+        working-directory: src
+        run: >
+          dotnet publish AssetStudioGUI/AssetStudioGUI.csproj
+          -c Release
+          -f net10.0-windows
+          --self-contained false
+          -o "${{ github.workspace }}\publish-gui"
+          /p:SolutionDir=..\
+          /p:Platform=Win32
       
-      - name: Build .Net472
-        run: msbuild /p:Configuration=Release /p:TargetFramework=net472 /verbosity:minimal
+      - name: Publish CLI (net10.0)
+        working-directory: src
+        run: >
+          dotnet publish AssetStudioCLI/AssetStudioCLI.csproj
+          -c Release
+          -f net10.0
+          --self-contained false
+          -o "${{ github.workspace }}\publish-cli"
+          /p:SolutionDir=..\
+          /verbosity:minimal
 
-      - name: Build .Net5
-        run: msbuild /t:AssetStudioGUI:publish /p:Configuration=Release /p:TargetFramework=net5.0-windows /p:SelfContained=false /verbosity:minimal
-
-      - name: Build .Net6
-        run: msbuild /t:AssetStudioGUI:publish /p:Configuration=Release /p:TargetFramework=net6.0-windows /p:SelfContained=false /verbosity:minimal
-
-      - name: Upload .Net472 Artifact
-        uses: actions/upload-artifact@v2
+      - name: Upload GUI artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: AssetStudio.net472
-          path: AssetStudioGUI/bin/Release/net472
+          name: AssetStudioMod-GUI-net10
+          path: publish-gui
 
-      - name: Upload .Net5 Artifact
-        uses: actions/upload-artifact@v2
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: AssetStudio.net5
-          path: AssetStudioGUI/bin/Release/net5.0-windows/publish
-
-      - name: Upload .Net6 Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: AssetStudio.net6
-          path: AssetStudioGUI/bin/Release/net6.0-windows/publish
+          name: AssetStudioMod-CLI-net10
+          path: publish-cli

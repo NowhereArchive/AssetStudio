@@ -964,7 +964,10 @@ namespace AssetStudioCLI
                 }
             }
             parsedAssetsList = animatorList;
-            Logger.Info($"Found {parsedAssetsList.Count} exportable Animator asset(s).");
+			Logger.Info($"Animation clips found: {animationList?.Count ?? 0}");
+			Logger.Info($"Export all animations flag: {exportAllAnimations}");
+
+			Logger.Info($"Found {parsedAssetsList.Count} exportable Animator asset(s).");
             if (parsedAssetsList.Count > 0 && CLIOptions.filterBy != FilterBy.None)
             {
                 FilterAssets();

@@ -881,6 +881,53 @@ namespace AssetStudioGUI
             });
         }
 
+        public static void BatchExportAnimatorsFromFolder(string inputFolder, string outputFolder)
+        {
+            // load all bundles in the folder
+            assetsManager.LoadFilesAndFolders(out _, inputFolder);
+            BuildAssetData();
+
+            var animators = exportableAssets
+                .Where(x => x.Type == ClassIDType.Animator)
+                .ToList();
+
+            var clips = exportableAssets
+                .Where(x => x.Type == ClassIDType.AnimationClip)
+                .ToList();
+
+            if (animators.Count == 0)
+            {
+                Logger.Info($"No Animators found in {inputFolder}");
+                return;
+            }
+
+            Logger.Info($"Found {animators.Count} Animator(s) and {clips.Count} AnimationClip(s)");
+
+            Progress.Reset();
+            var exported = 0;
+
+            foreach (var animator in animators)
+            {
+                try
+                {
+                    var exportPath = Path.Combine(outputFolder, animator.Text) 
+                        + Path.DirectorySeparatorChar;
+                    Directory.CreateDirectory(exportPath);
+                    Logger.Info($"Exporting {animator.Text}...");
+                    ExportAnimator(animator, exportPath, clips);
+                    exported++;
+                    Progress.Report(exported, animators.Count);
+                    Logger.Info($"Done: {animator.Text}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Failed: {animator.Text}", ex);
+                }
+            }
+
+            Logger.Info($"Finished: {exported}/{animators.Count} exported to {outputFolder}");
+        }
+
         public static void ExportObjectsWithAnimationClip(string exportPath, TreeNodeCollection nodes, List<AssetItem> animationList = null)
         {
             ThreadPool.QueueUserWorkItem(state =>
