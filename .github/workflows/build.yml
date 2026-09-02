@@ -8,8 +8,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Clone AssetStudioMod
-        run: git clone --branch AssetStudioMod https://github.com/aelurum/AssetStudio.git src
+      # Remove this step entirely - no need to clone
+      # - name: Clone AssetStudioMod
+      #   run: git clone --branch AssetStudioMod https://github.com/aelurum/AssetStudio.git src
+
+      # Add this step to checkout the repository if you want to use GitHub's checkout action
+      # This is the standard way to get your repo's files in GitHub Actions
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -22,7 +28,8 @@ jobs:
       - name: Patch csproj files to add net10.0
         shell: pwsh
         run: |
-          Get-ChildItem -Path src -Recurse -Filter "*.csproj" | ForEach-Object {
+          # Change src to . if your files are in the root, or keep src if that's where they are
+          Get-ChildItem -Path . -Recurse -Filter "*.csproj" | ForEach-Object {
             $content = Get-Content $_.FullName -Raw
             # Add net10.0-windows alongside net9.0-windows
             $content = $content -replace 'net9\.0-windows', 'net9.0-windows;net10.0-windows'
@@ -44,7 +51,8 @@ jobs:
       - name: Build native C++ projects (Texture2DDecoderNative)
         shell: pwsh
         run: |
-          Get-ChildItem -Path src -Recurse -Filter "*.vcxproj" | ForEach-Object {
+          # Change src to . if your files are in the root
+          Get-ChildItem -Path . -Recurse -Filter "*.vcxproj" | ForEach-Object {
             Write-Host "Building $($_.FullName)"
             msbuild $_.FullName /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
             msbuild $_.FullName /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
@@ -53,7 +61,8 @@ jobs:
       - name: Print Texture2DDecoderNative csproj references (debug)
         shell: pwsh
         run: |
-          Get-ChildItem -Path src -Recurse -Filter "*.csproj" | ForEach-Object {
+          # Change src to . if your files are in the root
+          Get-ChildItem -Path . -Recurse -Filter "*.csproj" | ForEach-Object {
             $content = Get-Content $_.FullName -Raw
             if ($content -match 'Texture2DDecoderNative') {
               Write-Host "=== $($_.FullName) ==="
@@ -65,7 +74,8 @@ jobs:
       - name: Patch motion converter to handle SDK 5/6 OffscreenRendering bindings
         shell: pwsh
         run: |
-          $file = Get-ChildItem -Path src -Recurse -Filter "CubismMotion3Converter.cs" | Select-Object -First 1
+          # Change src to . if your files are in the root
+          $file = Get-ChildItem -Path . -Recurse -Filter "CubismMotion3Converter.cs" | Select-Object -First 1
           $content = Get-Content $file.FullName -Raw
           # Add OffscreenRendering cases before the closing brace of the script switch
           $content = $content -replace 
@@ -82,7 +92,8 @@ jobs:
       - name: Patch Live2D SDK v6 unknown version guard
         shell: pwsh
         run: |
-            $file = Get-ChildItem -Path src -Recurse -Filter "Live2DExtractor.cs" | Select-Object -First 1
+            # Change src to . if your files are in the root
+            $file = Get-ChildItem -Path . -Recurse -Filter "Live2DExtractor.cs" | Select-Object -First 1
             $content = Get-Content $file.FullName -Raw
             $content = $content -replace 
               '(Logger\.Warning\(\$"Live2D model.*?Unknown SDK version.*?\);)\s*\r?\n\s*return;',
@@ -91,11 +102,13 @@ jobs:
             Write-Host "Patched: removed return after unknown SDK version warning"
 
       - name: Restore NuGet packages
-        working-directory: src
+        # Change src to . if your files are in the root
+        working-directory: .
         run: dotnet restore
 
       - name: Publish GUI
-        working-directory: src
+        # Change src to . if your files are in the root
+        working-directory: .
         run: >
           dotnet publish AssetStudioGUI/AssetStudioGUI.csproj
           -c Release
@@ -106,7 +119,8 @@ jobs:
           /p:Platform=Win32
       
       - name: Publish CLI (net10.0)
-        working-directory: src
+        # Change src to . if your files are in the root
+        working-directory: .
         run: >
           dotnet publish AssetStudioCLI/AssetStudioCLI.csproj
           -c Release
