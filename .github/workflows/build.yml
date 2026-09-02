@@ -39,7 +39,7 @@ jobs:
         run: |
           msbuild Texture2DDecoderNative/Texture2DDecoderNative.vcxproj /p:Configuration=Release /p:Platform=x64 
           msbuild AssetStudioFBXNative/AssetStudioFBXNative.vcxproj /p:Configuration=Release /p:Platform=x64
-          msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
+          msbuild AssetStudio.sln /t:AssetStudioGUI:Publish /t:AssetStudioCLI:Publish /p:Configuration=Release /p:Platform=x64 /p:TargetFramework=net9.0-windows /p:SolutionDir="${{ github.workspace }}\" /p:SelfContained=false /verbosity:minimal
 
           Get-ChildItem -r -n AssetStudioGUI/bin/
       
