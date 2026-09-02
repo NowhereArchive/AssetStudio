@@ -106,17 +106,17 @@ jobs:
         working-directory: .
         run: dotnet restore
 
-      - name: Publish GUI
-        # Change src to . if your files are in the root
-        working-directory: .
-        run: >
-          dotnet publish AssetStudioGUI/AssetStudioGUI.csproj
-          -c Release
-          -f net10.0-windows
-          --self-contained false
-          -o "${{ github.workspace }}\publish-gui"
-          /p:SolutionDir=..\
-          /p:Platform=Win32
+      # - name: Publish GUI
+      #   # Change src to . if your files are in the root
+      #   working-directory: .
+      #   run: >
+      #     dotnet publish AssetStudioGUI/AssetStudioGUI.csproj
+      #     -c Release
+      #     -f net10.0-windows
+      #     --self-contained false
+      #     -o "${{ github.workspace }}\publish-gui"
+      #     /p:SolutionDir=..\
+      #     /p:Platform=Win32
       
       - name: Publish CLI (net10.0)
         # Change src to . if your files are in the root
